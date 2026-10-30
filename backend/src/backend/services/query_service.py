@@ -1,10 +1,15 @@
 import asyncio
 import re
 
-from groq import AsyncGroq
+from groq import APITimeoutError, AsyncGroq, GroqError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.config import get_settings
+from backend.core.exception import (
+    LLMProviderError,
+    QueryTimeoutError,
+    QueryValidationError,
+)
 from backend.repositories.query_repository import QueryRepository
 from backend.schemas.query import QueryRequest, QueryResponse
 
@@ -53,12 +58,14 @@ class QueryService:
                 ),
                 timeout=self.llm_timeout_seconds,
             )
-        except asyncio.TimeoutError:
-            raise TimeoutError("The language model request timed out.") from None
+        except (asyncio.TimeoutError, APITimeoutError):
+            raise QueryTimeoutError() from None
+        except GroqError as error:
+            raise LLMProviderError() from error
 
         content = completion.choices[0].message.content
         if not content:
-            raise ValueError("The language model returned an empty SQL query.")
+            raise QueryValidationError()
 
         sql = _extract_sql(content)
         statement = _validate_sql(sql)
@@ -84,16 +91,16 @@ def _validate_sql(sql: str) -> str:
     statement = sql.strip().rstrip(";").strip()
 
     if not statement:
-        raise ValueError("SQL query must not be empty.")
+        raise QueryValidationError()
     if not re.match(r"^SELECT\b", statement, re.IGNORECASE):
-        raise ValueError("Only SELECT queries are allowed.")
+        raise QueryValidationError()
     if ";" in statement or "--" in statement or "/*" in statement or "*/" in statement:
-        raise ValueError("SQL comments and multiple statements are not allowed.")
+        raise QueryValidationError()
     if _DISALLOWED_SQL.search(statement):
-        raise ValueError("The SQL query contains a disallowed operation.")
+        raise QueryValidationError()
     if not re.search(r"\bFROM\s+customers\b", statement, re.IGNORECASE):
-        raise ValueError("The SQL query must read from the customers table.")
+        raise QueryValidationError()
     if re.search(r"\b(JOIN|UNION|INTERSECT|EXCEPT|WITH)\b", statement, re.IGNORECASE):
-        raise ValueError("Joins, set operations, and CTEs are not allowed.")
+        raise QueryValidationError()
 
     return statement

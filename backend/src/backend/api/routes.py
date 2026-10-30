@@ -1,9 +1,9 @@
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.exception import AppException
 from backend.db.connection import get_db
 from backend.schemas.query import QueryRequest, QueryResponse
 from backend.services.query_service import QueryService
@@ -32,19 +32,25 @@ async def query(
 
     try:
         return await QueryService(session).answer(request)
-    except TimeoutError as error:
+    except AppException as error:
+        logger.warning(
+            "Query failed with %s: %s",
+            error.code,
+            error.message,
+        )
         raise HTTPException(
-            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            detail=str(error),
+            status_code=error.status_code,
+            detail={
+                "code": error.code,
+                "message": error.message,
+            },
         ) from error
-    except ValueError as error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(error),
-        ) from error
-    except SQLAlchemyError as error:
-        logger.exception("Customer query failed.")
+    except Exception as error:
+        logger.exception("Unexpected customer query failure.")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="The database query failed.",
+            detail={
+                "code": "INTERNAL_SERVER_ERROR",
+                "message": "The query could not be completed.",
+            },
         ) from error
