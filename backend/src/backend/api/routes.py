@@ -1,8 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.exception import AppException
 from backend.core.logging import get_logger
+from backend.core.config import get_settings
+
+from backend.core.rate_limit import limiter
 from backend.db.connection import get_db
 from backend.schemas.query import QueryRequest, QueryResponse
 from backend.services.query_service import QueryService
@@ -23,14 +26,16 @@ async def health_check() -> dict[str, str]:
     status_code=status.HTTP_200_OK,
     tags=["Query"],
 )
+@limiter.limit(get_settings().query_rate_limit)
 async def query(
-    request: QueryRequest,
+    request: Request,
+    query_request: QueryRequest,
     session: AsyncSession = Depends(get_db),
 ) -> QueryResponse:
-    logger.info("Received customer query: %s", request.question)
+    logger.info("Received customer query: %s", query_request.question)
 
     try:
-        return await QueryService(session).answer(request)
+        return await QueryService(session).answer(query_request)
     except AppException as error:
         logger.warning(
             "Query failed with %s: %s",

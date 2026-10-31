@@ -40,3 +40,11 @@ class QueryTimeoutError(AppException):
             code="QUERY_TIMEOUT_ERROR",
             status_code=504
         )
+
+class RateLimitExceededError(AppException):
+    def __init__(self):
+        super().__init__(
+            message="Rate limit exceeded",
+            code="RATE_LIMIT_EXCEEDED",
+            status_code=429
+        )

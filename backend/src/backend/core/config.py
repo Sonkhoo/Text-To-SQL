@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = Field(default=30.0, gt=0)
     database_timeout_seconds: float = Field(default=10.0, gt=0)
     log_level: str = Field(default="INFO")
+    query_rate_limit: str = Field(default="10/minute")
 
     allowed_origins: list[str] = Field(
         default_factory=lambda: ["http://localhost:5173"]
@@ -26,4 +27,4 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings() # pyright: ignore[reportCallIssue]
+    return Settings()  # type: ignore[call-arg]  # pyright: ignore[reportCallIssue]
