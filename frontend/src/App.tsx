@@ -21,7 +21,7 @@ type Message = {
 }
 
 const suggestions = [
-  'Show me all female customers from Mumbai',
+  'Show me all female customers from Kolkata',
   'List every customer in Delhi',
   'How many customers are from Bengaluru?',
 ]
