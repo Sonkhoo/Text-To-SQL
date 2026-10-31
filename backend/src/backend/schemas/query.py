@@ -20,3 +20,5 @@ class QueryResponse(BaseModel):
     sql: str
     results: list[dict[str, Any]]
     count: int
+    abstained: bool = False
+    message: str | None = None

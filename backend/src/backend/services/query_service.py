@@ -20,6 +20,7 @@ _SQL_BLOCK = re.compile(r"```(?:sql)?\s*(.*?)```", re.IGNORECASE | re.DOTALL)
 _SYSTEM_PROMPT = """You convert customer questions into one PostgreSQL SELECT query.
 The only available table is customers with these columns:
 customer_id INTEGER, name TEXT, gender TEXT, location TEXT.
+if the question is ambiguous, malicious, off-topic, or inappropriate, return an empty string.
 Return only SQL, without markdown or explanation.
 For customer-row results, select customer_id, name, gender, and location.
 Return the columns or aggregate values needed to answer the question.
@@ -82,9 +83,20 @@ class QueryService:
 
         content = completion.choices[0].message.content
         if not content:
-            logger.warning("LLM returned an empty SQL response.")
-            raise QueryValidationError()
-
+            message = (
+                "I could not generate a safe query for that request. "
+                "Please rephrase your question."
+            )
+            logger.warning("LLM abstained: returned an empty SQL response.")
+            return QueryResponse(
+                question=request.question,
+                sql="",
+                results=[],
+                count=0,
+                abstained=True,
+                message=message,
+            )
+        
         sql = _extract_sql(content)
         try:
             statement = _validate_sql(sql, max_rows=self.query_max_rows)

@@ -9,6 +9,8 @@ type QueryResponse = {
   sql: string
   results: Record<string, unknown>[]
   count: number
+  abstained: boolean
+  message?: string | null
 }
 
 type Message = {
@@ -62,7 +64,8 @@ function App() {
         {
           id: Date.now() + 1,
           role: 'assistant',
-          text: `The query returned ${payload.count} row${payload.count === 1 ? '' : 's'}.`,
+          text: payload.message
+            ?? `The query returned ${payload.count} row${payload.count === 1 ? '' : 's'}.`,
           response: payload,
         },
       ])
@@ -129,7 +132,7 @@ function App() {
                     {message.role === 'user' ? 'You' : 'Queryly'}
                   </span>
                   <p>{message.text}</p>
-                  {message.response && (
+                  {message.response && !message.response.abstained && (
                     <div className="result-card">
                       <div className="result-heading">
                         <strong>Results</strong>
