@@ -1,15 +1,14 @@
-import logging
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.exception import AppException
+from backend.core.logging import get_logger
 from backend.db.connection import get_db
 from backend.schemas.query import QueryRequest, QueryResponse
 from backend.services.query_service import QueryService
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @router.get("/health", status_code=status.HTTP_200_OK, tags=["Health"])

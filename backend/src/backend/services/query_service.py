@@ -10,6 +10,7 @@ from backend.core.exception import (
     QueryTimeoutError,
     QueryValidationError,
 )
+from backend.core.logging import get_logger
 from backend.repositories.query_repository import QueryRepository
 from backend.schemas.query import QueryRequest, QueryResponse
 
@@ -21,12 +22,14 @@ The only available table is customers with these columns:
 customer_id INTEGER, name TEXT, gender TEXT, location TEXT.
 Return only SQL, without markdown or explanation.
 Select only customer_id, name, gender, and location.
+All name, gender, and location values should be returned in lowercase.
 Never use INSERT, UPDATE, DELETE, DROP, ALTER, TRUNCATE, or multiple statements.
 """
 _DISALLOWED_SQL = re.compile(
     r"\b(ALTER|CALL|CREATE|DELETE|DROP|EXEC|GRANT|INSERT|REVOKE|TRUNCATE|UPDATE)\b",
     re.IGNORECASE,
 )
+logger = get_logger(__name__)
 
 
 class QueryService:
@@ -59,8 +62,10 @@ class QueryService:
                 timeout=self.llm_timeout_seconds,
             )
         except (asyncio.TimeoutError, APITimeoutError):
+            logger.warning("LLM request timed out after %s seconds.", self.llm_timeout_seconds)
             raise QueryTimeoutError() from None
         except GroqError as error:
+            logger.exception("LLM provider request failed.")
             raise LLMProviderError() from error
 
         content = completion.choices[0].message.content
@@ -69,6 +74,7 @@ class QueryService:
 
         sql = _extract_sql(content)
         statement = _validate_sql(sql)
+        logger.info("Generated read-only SQL for customer query.")
         results = await self.repository.execute_read_only(
             statement,
             timeout_seconds=self.database_timeout_seconds,

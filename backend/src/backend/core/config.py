@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     groq_api_key: SecretStr
     llm_timeout_seconds: float = Field(default=30.0, gt=0)
     database_timeout_seconds: float = Field(default=10.0, gt=0)
+    log_level: str = Field(default="INFO")
 
     allowed_origins: list[str] = Field(
         default_factory=lambda: ["http://localhost:5173"]

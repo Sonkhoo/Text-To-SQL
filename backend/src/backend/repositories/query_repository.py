@@ -6,8 +6,10 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.exception import QueryExecutionError, QueryTimeoutError
+from backend.core.logging import get_logger
 from backend.schemas.query import CustomerResult
 
+logger = get_logger(__name__)
 
 
 class QueryRepository:
@@ -28,9 +30,11 @@ class QueryRepository:
             )
         except asyncio.TimeoutError:
             await self.session.rollback()
+            logger.warning("Database query timed out after %s seconds.", timeout_seconds)
             raise QueryTimeoutError() from None
         except SQLAlchemyError as error:
             await self.session.rollback()
+            logger.exception("Database query execution failed.")
             raise QueryExecutionError() from error
         rows = result.mappings().all()
 
@@ -43,5 +47,4 @@ class QueryRepository:
             )
             for row in rows
         ]
-
 
