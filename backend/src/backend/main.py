@@ -23,9 +23,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="My FastAPI Application",
+    title="Queryly API",
     version="1.0.0",
-    description="A simple FastAPI application",
+    description="An API for converting natural language queries into SQL queries.",
     lifespan=lifespan
 )
 
