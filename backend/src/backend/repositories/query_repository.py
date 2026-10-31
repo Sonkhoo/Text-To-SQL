@@ -1,5 +1,5 @@
 import asyncio
-import re
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.exception import QueryExecutionError, QueryTimeoutError
 from backend.core.logging import get_logger
-from backend.schemas.query import CustomerResult
 
 logger = get_logger(__name__)
 
@@ -20,7 +19,7 @@ class QueryRepository:
         self,
         sql: str,
         timeout_seconds: float = 10.0,
-    ) -> list[CustomerResult]:
+    ) -> list[dict[str, Any]]:
         
 
         try:
@@ -38,13 +37,4 @@ class QueryRepository:
             raise QueryExecutionError() from error
         rows = result.mappings().all()
 
-        return [
-            CustomerResult(
-                customer_id=row["customer_id"],
-                name=row["name"],
-                gender=row["gender"],
-                location=row["location"],
-            )
-            for row in rows
-        ]
-
+        return [dict(row) for row in rows]

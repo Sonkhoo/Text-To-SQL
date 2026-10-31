@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     database_timeout_seconds: float = Field(default=10.0, gt=0)
     log_level: str = Field(default="INFO")
     query_rate_limit: str = Field(default="10/minute")
+    query_max_rows: int = Field(default=100, gt=0)
 
     allowed_origins: list[str] = Field(
         default_factory=lambda: ["http://localhost:5173"]

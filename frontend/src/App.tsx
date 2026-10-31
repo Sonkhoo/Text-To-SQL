@@ -4,17 +4,10 @@ import './App.css'
 
 const API_BASE_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
 
-type Customer = {
-  customer_id: number
-  name: string
-  gender: string
-  location: string
-}
-
 type QueryResponse = {
   question: string
   sql: string
-  results: Customer[]
+  results: Record<string, unknown>[]
   count: number
 }
 
@@ -69,7 +62,7 @@ function App() {
         {
           id: Date.now() + 1,
           role: 'assistant',
-          text: `I found ${payload.count} customer${payload.count === 1 ? '' : 's'} matching your question.`,
+          text: `The query returned ${payload.count} row${payload.count === 1 ? '' : 's'}.`,
           response: payload,
         },
       ])
@@ -146,15 +139,16 @@ function App() {
                         <div className="table-wrap">
                           <table>
                             <thead>
-                              <tr><th>ID</th><th>Name</th><th>Gender</th><th>Location</th></tr>
+                              {Object.keys(message.response.results[0]).map((column) => (
+                                <th key={column}>{column.replaceAll('_', ' ')}</th>
+                              ))}
                             </thead>
                             <tbody>
-                              {message.response.results.map((customer) => (
-                                <tr key={customer.customer_id}>
-                                  <td>{customer.customer_id}</td>
-                                  <td>{customer.name}</td>
-                                  <td>{customer.gender}</td>
-                                  <td>{customer.location}</td>
+                              {message.response.results.map((row, rowIndex) => (
+                                <tr key={rowIndex}>
+                                  {Object.values(row).map((value, valueIndex) => (
+                                    <td key={valueIndex}>{String(value ?? '')}</td>
+                                  ))}
                                 </tr>
                               ))}
                             </tbody>

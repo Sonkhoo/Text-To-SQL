@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -13,15 +15,8 @@ class QueryRequest(BaseModel):
         return value
 
 
-class CustomerResult(BaseModel):
-    customer_id: int
-    name: str
-    gender: str
-    location: str
-
-
 class QueryResponse(BaseModel):
     question: str
     sql: str
-    results: list[CustomerResult]
+    results: list[dict[str, Any]]
     count: int

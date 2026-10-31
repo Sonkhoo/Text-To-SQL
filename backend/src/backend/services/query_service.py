@@ -21,12 +21,23 @@ _SYSTEM_PROMPT = """You convert customer questions into one PostgreSQL SELECT qu
 The only available table is customers with these columns:
 customer_id INTEGER, name TEXT, gender TEXT, location TEXT.
 Return only SQL, without markdown or explanation.
-Select only customer_id, name, gender, and location.
+For customer-row results, select customer_id, name, gender, and location.
+Return the columns or aggregate values needed to answer the question.
+Allowed operations include WHERE, AND, OR, NOT, COUNT, SUM, AVG, MIN, MAX,
+DISTINCT, GROUP BY, HAVING, ORDER BY, LIMIT, joins, and read-only subqueries.
+Use only the customers table and its columns.
+When asking for the city or cities with the highest or lowest value, return all
+ties using a read-only subquery or ranking expression. Do not use LIMIT 1 for
+an extremum unless the user explicitly asks for exactly one result.
 All name, gender, and location values should be returned in lowercase.
 Never use INSERT, UPDATE, DELETE, DROP, ALTER, TRUNCATE, or multiple statements.
 """
 _DISALLOWED_SQL = re.compile(
-    r"\b(ALTER|CALL|CREATE|DELETE|DROP|EXEC|GRANT|INSERT|REVOKE|TRUNCATE|UPDATE)\b",
+    r"\b("
+    r"ALTER|ANALYZE|CALL|COMMENT|COMMIT|COPY|CREATE|DELETE|DO|DROP|"
+    r"EXECUTE|GRANT|INSERT|INTO|LOCK|MERGE|REFRESH|REINDEX|RELEASE|RENAME|"
+    r"REVOKE|ROLLBACK|SAVEPOINT|SET|TRUNCATE|UPDATE|VACUUM"
+    r")\b",
     re.IGNORECASE,
 )
 logger = get_logger(__name__)
@@ -47,6 +58,7 @@ class QueryService:
         self.model = settings.groq_model
         self.llm_timeout_seconds = settings.llm_timeout_seconds
         self.database_timeout_seconds = settings.database_timeout_seconds
+        self.query_max_rows = settings.query_max_rows
 
     async def answer(self, request: QueryRequest) -> QueryResponse:
         try:
@@ -70,11 +82,16 @@ class QueryService:
 
         content = completion.choices[0].message.content
         if not content:
+            logger.warning("LLM returned an empty SQL response.")
             raise QueryValidationError()
 
         sql = _extract_sql(content)
-        statement = _validate_sql(sql)
-        logger.info("Generated read-only SQL for customer query.")
+        try:
+            statement = _validate_sql(sql, max_rows=self.query_max_rows)
+        except QueryValidationError:
+            logger.warning("Rejected generated SQL: %s", sql)
+            raise
+        logger.info("Generated read-only SQL: %s", statement)
         results = await self.repository.execute_read_only(
             statement,
             timeout_seconds=self.database_timeout_seconds,
@@ -93,20 +110,30 @@ def _extract_sql(content: str) -> str:
     return (match.group(1) if match else content).strip()
 
 
-def _validate_sql(sql: str) -> str:
+def _validate_sql(sql: str, max_rows: int = 100) -> str:
     statement = sql.strip().rstrip(";").strip()
 
     if not statement:
         raise QueryValidationError()
-    if not re.match(r"^SELECT\b", statement, re.IGNORECASE):
-        raise QueryValidationError()
-    if ";" in statement or "--" in statement or "/*" in statement or "*/" in statement:
-        raise QueryValidationError()
-    if _DISALLOWED_SQL.search(statement):
-        raise QueryValidationError()
-    if not re.search(r"\bFROM\s+customers\b", statement, re.IGNORECASE):
-        raise QueryValidationError()
-    if re.search(r"\b(JOIN|UNION|INTERSECT|EXCEPT|WITH)\b", statement, re.IGNORECASE):
+    if _DISALLOWED_SQL.search(_mask_sql_literals(statement)):
         raise QueryValidationError()
 
-    return statement
+    return _apply_row_limit(statement, max_rows)
+
+
+def _mask_sql_literals(sql: str) -> str:
+    return re.sub(r"'(?:''|[^'])*'|\"(?:\"\"|[^\"])*\"", " ", sql)
+
+
+def _apply_row_limit(sql: str, max_rows: int) -> str:
+    limit_match = re.search(r"\bLIMIT\s+(\d+)\b", sql, re.IGNORECASE)
+    if limit_match:
+        requested_limit = int(limit_match.group(1))
+        if requested_limit <= max_rows:
+            return sql
+        return (
+            sql[:limit_match.start(1)]
+            + str(max_rows)
+            + sql[limit_match.end(1):]
+        )
+    return f"{sql} LIMIT {max_rows}"
